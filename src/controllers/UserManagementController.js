@@ -287,46 +287,66 @@ class UserManagementController {
   };
   
   // Ban user (permanent)
-  banUser = async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const { reason } = req.body;
-      
-      const updateData = {
-        status: 'banned'
-      };
-      
-      // Add ban reason for logging/tracking
-      if (reason) {
-        updateData.banReason = reason;
-      }
-      
-      const response = await axios.patch(
-        `${AUTH_SERVICE_URL}/users/${userId}`,
-        updateData,
-        {
-          headers: {
-            'Authorization': req.headers.authorization
-          }
+banUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { reason } = req.body;
+    
+    // First get the current user data to access their roles
+    const userResponse = await axios.get(
+      `${AUTH_SERVICE_URL}/users/${userId}`,
+      {
+        headers: {
+          'Authorization': req.headers.authorization
         }
-      );
-      
-      // Implement notification to user about ban (via email service)
-      
-      return res.status(200).json({
-        message: 'User account permanently banned',
-        user: response.data.user
-      });
-    } catch (error) {
-      console.error('Error banning user:', error.message);
-      
-      if (error.response) {
-        return res.status(error.response.status).json(error.response.data);
       }
-      
-      return res.status(500).json({ message: 'Error communicating with auth service' });
+    );
+    
+    const user = userResponse.data.user;
+    
+    // Create roleStatus updates with banned status for all roles
+    const roleStatusUpdates = {};
+    user.roles.forEach(role => {
+      roleStatusUpdates[role] = 'banned';
+    });
+    
+    const updateData = {
+      status: 'banned',
+      roleStatus: roleStatusUpdates,
+      bannedAt: new Date().toISOString()
+    };
+    
+    // Add ban reason for logging/tracking
+    if (reason) {
+      updateData.banReason = reason;
     }
-  };
+    
+    const response = await axios.patch(
+      `${AUTH_SERVICE_URL}/users/${userId}`,
+      updateData,
+      {
+        headers: {
+          'Authorization': req.headers.authorization
+        }
+      }
+    );
+    
+    // Implement notification to user about ban (via email service)
+    
+    return res.status(200).json({
+      message: 'User account permanently banned',
+      user: response.data.user
+    });
+  } catch (error) {
+    console.error('Error banning user:', error.message);
+    
+    if (error.response) {
+      return res.status(error.response.status).json(error.response.data);
+    }
+    
+    return res.status(500).json({ message: 'Error communicating with auth service' });
+  }
+};
   
   // Get pending applications for restaurant and driver roles
   getPendingApplications = async (req, res) => {
